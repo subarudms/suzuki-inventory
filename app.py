@@ -29,7 +29,7 @@ def color_status(val):
     color = 'green' if val == '現車' else 'red' if val == '已交車' else 'orange'
     return f'color: {color}'
 
-st.dataframe(filtered_df.style.applymap(color_status, subset=['狀態']), use_container_width=True)
+st.dataframe(filtered_df.style.map(color_status, subset=['狀態']), use_container_width=True)
 
 # --- 快速報價功能 ---
 if not filtered_df.empty:
