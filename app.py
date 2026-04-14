@@ -1,42 +1,61 @@
 import streamlit as st
 import pandas as pd
 
-# 設定網頁標題
 st.set_page_config(page_title="陳胤合 - 車輛庫存查詢器", layout="wide")
-st.title("🚗 車輛庫存即時查詢系統")
+st.title("🚗 Suzuki 車輛庫存查詢(數量統計版)")
 
-# 讀取資料 (從 GitHub 上的 csv 讀取)
 @st.cache_data
 def load_data():
-    return pd.read_csv("inventory.csv")
+    # 確保年份與數量讀取正確
+    df = pd.read_csv("inventory.csv", dtype={'年份': str, '數量': int})
+    return df
 
 df = load_data()
 
-# --- 側邊欄過濾器 ---
-st.sidebar.header("篩選條件")
-search_model = st.sidebar.multiselect("選擇車型", options=df["車型"].unique(), default=list(df["車型"].unique()))
-search_status = st.sidebar.multiselect("庫存狀態", options=df["狀態"].unique(), default=list(df["狀態"].unique()))
+# --- 側邊欄：篩選器 ---
+st.sidebar.header("🔍 篩選條件")
 
-# --- 執行篩選 ---
-mask = (df["車型"].isin(search_model)) & (df["狀態"].isin(search_status))
+# 1. 車型篩選
+all_models = sorted(df["車型"].unique())
+search_model = st.sidebar.multiselect("選擇車型", options=all_models, default=all_models)
+
+# 2. 年份篩選
+all_years = sorted(df["年份"].unique(), reverse=True)
+search_year = st.sidebar.multiselect("出廠年份", options=all_years, default=all_years)
+
+# 3. 顏色搜尋
+color_keyword = st.sidebar.text_input("搜尋特定顏色", "")
+
+# --- 執行過濾 ---
+mask = (df["車型"].isin(search_model)) & (df["年份"].isin(search_year))
+if color_keyword:
+    mask = mask & (df["顏色"].str.contains(color_keyword))
+
 filtered_df = df[mask]
 
-# --- 顯示結果 ---
-st.metric("符合條件車輛", len(filtered_df))
+# --- 顯示數據摘要 ---
+total_stock = filtered_df["數量"].sum()
+st.metric("當前篩選總台數", f"{total_stock} 台")
 
-# 根據狀態上色 (簡單範例)
-def color_status(val):
-    color = 'green' if val == '現車' else 'red' if val == '已交車' else 'orange'
-    return f'color: {color}'
+# --- 排序與呈現 ---
+# 按車型排序，年份從新到舊
+display_df = filtered_df.sort_values(by=["車型", "年份"], ascending=[True, False])
 
-st.dataframe(filtered_df.style.map(color_status, subset=['狀態']), use_container_width=True)
+# 重新定義欄位順序，讓「數量」排在醒目的地方
+cols = ["車型", "年份", "顏色", "數量", "狀態", "位置", "建議售價"]
+display_df = display_df[cols]
 
-# --- 快速報價功能 ---
-if not filtered_df.empty:
-    st.divider()
-    selected_car = st.selectbox("選擇車型以產生分享文字", filtered_df["車型"] + " - " + filtered_df["顏色"])
-    if st.button("生成 LINE 分享文字"):
-        row = filtered_df.iloc[0] # 這裡可以根據 selectbox 選擇
-        share_text = f"【庫存回報】\n車型：{row['車型']}\n年式：{row['年份']}\n顏色：{row['顏色']}\n狀態：{row['狀態']}\n目前位置：{row['位置']}"
-        st.code(share_text)
-        st.success("請長按上方文字複製到 LINE！")
+# 顯示表格
+st.subheader("📋 庫存數量清單")
+st.dataframe(
+    display_df, 
+    use_container_width=True, 
+    hide_index=True
+)
+
+# --- 醒目提醒 (低庫存警告) ---
+low_stock = display_df[display_df["數量"] <= 1]
+if not low_stock.empty:
+    st.warning("⚠️ 以下車款庫存僅剩 1 台或以下，請留意：")
+    for _, row in low_stock.iterrows():
+        st.write(f"• {row['年份']} {row['車型']} ({row['顏色']})")
