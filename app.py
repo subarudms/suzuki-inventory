@@ -14,8 +14,8 @@ df = load_data()
 
 # --- 側邊欄過濾器 ---
 st.sidebar.header("篩選條件")
-search_model = st.sidebar.multiselect("選擇車型", options=df["車型"].unique(), default=df["車型"].unique())
-search_status = st.sidebar.multiselect("庫存狀態", options=df["狀態"].unique(), default=["現車", "預訂中"])
+search_model = st.sidebar.multiselect("選擇車型", options=df["車型"].unique(), 
+search_status = st.sidebar.multiselect("庫存狀態", options=df["狀態"].unique(), 
 
 # --- 執行篩選 ---
 mask = (df["車型"].isin(search_model)) & (df["狀態"].isin(search_status))
