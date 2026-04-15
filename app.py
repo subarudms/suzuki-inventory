@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="陳胤合 - Suzuki 庫存看板", layout="wide")
+st.set_page_config(page_title="順利通 - Suzuki 庫存看板", layout="wide")
 st.title("🚗 Suzuki 車輛庫存查詢 (年式細分版)")
 
 @st.cache_data
