@@ -42,25 +42,33 @@ st.markdown("""
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             border-left: 6px solid #e11b22; /* 左側紅色飾條 */
             transition: transform 0.2s;
-        }
-        div[data-testid="stMetric"]:hover { transform: translateY(-5px); } /* 懸停動畫 */
-        
-        /* 表格美化 */
-        .stDataFrame {
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 3. 顯示自定義專業標題
-st.markdown("<h1 class='main-title'>SUZUKI 精準庫存管理系統</h1>", unsafe_allow_html=True)
-
-# 4. 讀取資料邏輯 (加入錯誤處理與 TTL 快取)
-@st.cache_data(ttl=120) # 快取 2 分鐘，平衡速度與即時性
+        # 4. 讀取資料邏輯 (修正後的穩定版本)
+@st.cache_data(ttl=120)
 def load_data():
     try:
+        # 讀取 CSV
+        data = pd.read_csv("inventory.csv").fillna(0)
+        
+        # 數據清理：確保數值欄位為整數
+        num_cols = ["在庫數", "向金鈴提車", "領牌車", "已配數量"]
+        for col in num_cols:
+            if col in data.columns:
+                # 移除非數字字元並轉為整數
+                data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(int)
+        
+        # 重新計算待到貨：在庫數 - 已配數量
+        if "在庫數" in data.columns and "已配數量" in data.columns:
+            data["待到貨/可用"] = data["在庫數"] - data["已配數量"]
+        else:
+            data["待到貨/可用"] = 0
+            
+        return data, None # 成功時傳回資料和無錯誤
+    except Exception as e:
+        return pd.DataFrame(), str(e) # 失敗時傳回空表和錯誤訊息
+
+# 呼叫函數
+df, error_msg = load_data()
+
         # 讀取 CSV
         df = pd.read_csv("inventory.csv").fillna(0)
         
