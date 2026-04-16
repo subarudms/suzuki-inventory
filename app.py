@@ -122,5 +122,3 @@ elif menu == "📖 數位產品型錄":
 # 底部資訊
 st.sidebar.markdown("---")
 st.sidebar.info("👤 目前使用者：SUZUKI 專業銷售")
-
-```
