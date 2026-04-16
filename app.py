@@ -1,24 +1,24 @@
 import streamlit as st
 import pandas as pd
 import os
-import base64
+import urllib.parse
 
-# 1. 頁面基礎設定 (針對 iPhone 17 Pro Max 優化佈局)
+# 1. 頁面基礎設定
 st.set_page_config(
-    page_title="SUZUKI 銷售助理系統",
+    page_title="SUZUKI 行動銷售助理",
     page_icon="🚗",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 2. 進階介面優化 CSS (加入 PDF 預覽容器樣式)
+# 2. 針對手機優化的 CSS
 st.markdown("""
     <style>
     .stApp { background-color: #f8f9fa; }
     [data-testid="stSidebar"] { background-color: #003B85; }
     [data-testid="stSidebar"] * { color: white !important; }
     
-    /* 庫存看板卡片 */
+    /* 庫存摘要卡片 */
     .metric-card {
         background-color: white;
         padding: 15px;
@@ -31,55 +31,46 @@ st.markdown("""
     .metric-label { color: #666; font-size: 0.85rem; margin-bottom: 2px; }
     .metric-value { color: #333; font-size: 1.8rem; font-weight: bold; margin: 0; }
     
-    /* 目錄卡片樣式 */
+    /* 型錄卡片樣式 */
     .car-card {
         background-color: white;
-        padding: 15px;
-        border-radius: 15px;
+        padding: 20px;
+        border-radius: 18px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        margin-bottom: 10px;
+        margin-bottom: 15px;
         text-align: center;
         border: 1px solid #eee;
     }
-    .car-name { color: #003B85; font-weight: bold; font-size: 1.2rem; }
+    .car-name { color: #003B85; font-weight: bold; font-size: 1.3rem; margin-bottom: 5px; }
     
-    /* 按鈕樣式 */
+    /* 專業按鈕樣式 */
     .stButton>button {
         width: 100%;
-        border-radius: 10px;
+        border-radius: 12px;
         background-color: #003B85;
         color: white;
         border: none;
-        padding: 10px;
+        padding: 12px;
         font-weight: bold;
-    }
-    .stButton>button:hover {
-        background-color: #E30613;
-        color: white;
+        font-size: 1rem;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. PDF 預覽功能函數
-def display_pdf(file_path):
-    if os.path.exists(file_path):
-        with open(file_path, "rb") as f:
-            base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-        # 嵌入 PDF 預覽，高度設為 800px 方便在手機滑動
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf" style="border:none; border-radius:10px;"></iframe>'
-        st.markdown(pdf_display, unsafe_allow_html=True)
-    else:
-        st.error(f"找不到檔案：{file_path}")
-
-# 4. 側邊欄選單
+# 3. 側邊欄選單
 st.sidebar.title("🚀 功能選單")
-menu = st.sidebar.radio("切換功能：", ["📊 庫存看板與明細", "📖 數位產品型錄"])
+menu = st.sidebar.radio("切換頁面：", ["📊 庫存看板", "📖 數位產品型錄"])
 
-# 5. 邏輯：庫存看板與明細表
-if menu == "📊 庫存看板與明細":
+# GitHub 原始檔案基礎路徑 (確保能抓到您的檔案)
+GITHUB_USER = "subarudms"
+REPO_NAME = "suzuki-inventory"
+BASE_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/"
+
+# 4. 邏輯：庫存看板
+if menu == "📊 庫存看板":
     st.title("專業庫存即時看板")
     
-    # 摘要數字
+    # 摘要數據
     c1, c2 = st.columns(2)
     with c1:
         st.markdown('<div class="metric-card"><p class="metric-label">總計在庫</p><p class="metric-value">33 台</p></div>', unsafe_allow_html=True)
@@ -91,36 +82,50 @@ if menu == "📊 庫存看板與明細":
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("📋 車型庫存詳細清單")
     
-    # 讀取並顯示庫存 CSV
     if os.path.exists("inventory.csv"):
         try:
-            inventory_df = pd.read_csv("inventory.csv")
-            st.dataframe(inventory_df, use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error("讀取 inventory.csv 失敗，請確認檔案格式。")
+            df = pd.read_csv("inventory.csv")
+            st.dataframe(df, use_container_width=True, hide_index=True)
+        except:
+            st.error("讀取明細失敗。")
     else:
-        st.warning("根目錄中找不到 inventory.csv")
+        st.warning("找不到 inventory.csv")
 
-# 6. 邏輯：數位產品型錄 (支援 App 內預覽)
+# 5. 邏輯：數位產品型錄 (解決 iPhone 觀看問題)
 elif menu == "📖 數位產品型錄":
-    st.title("數位產品型錄")
-    
-    # 初始化 Session State 來追蹤當前選中的 PDF
-    if 'selected_pdf' not in st.session_state:
-        st.session_state.selected_pdf = None
+    # 使用 Session State 記錄選中的車款
+    if 'car_choice' not in st.session_state:
+        st.session_state.car_choice = None
 
-    # 如果有選中 PDF，顯示預覽與返回按鈕
-    if st.session_state.selected_pdf:
+    if st.session_state.car_choice:
+        # 顯示返回按鈕
         if st.button("⬅️ 返回型錄列表"):
-            st.session_state.selected_pdf = None
+            st.session_state.car_choice = None
             st.rerun()
         
-        st.subheader(f"正在閱讀：{st.session_state.selected_pdf}")
-        display_pdf(st.session_state.selected_pdf)
-    
-    # 否則顯示卡片清單
+        car = st.session_state.car_choice
+        st.subheader(f"正在閱讀：{car['name']}")
+        
+        # 建立 PDF 連結 (GitHub Raw 連結)
+        encoded_file = urllib.parse.quote(car['file'])
+        pdf_url = f"{BASE_RAW_URL}{encoded_file}"
+        
+        # 使用 Google PDF Viewer 嵌入，這是解決 iOS 只能看第一頁的最強方案
+        viewer_url = f"https://docs.google.com/viewer?url={pdf_url}&embedded=true"
+        
+        st.markdown(f"""
+            <div style="text-align: center; margin-bottom: 10px;">
+                <a href="{pdf_url}" target="_blank" style="color: #003B85; text-decoration: none; font-size: 0.9rem;">
+                    💡 如果畫面跑不出來，請點此開啟全螢幕原檔
+                </a>
+            </div>
+            <iframe src="{viewer_url}" width="100%" height="700px" style="border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);"></iframe>
+        """, unsafe_allow_html=True)
+        
     else:
-        st.write("點擊「在線閱讀」即可直接在此開啟 PDF 目錄")
+        st.title("數位產品型錄")
+        st.write("請選擇欲向客戶展示的車型：")
+
         cars = [
             {"name": "SWIFT", "desc": "城市經典 輕油電", "file": "Swift.pdf"},
             {"name": "JIMNY", "desc": "本格越野精神", "file": "Jimny.pdf"},
@@ -133,10 +138,15 @@ elif menu == "📖 數位產品型錄":
         cols = st.columns(2)
         for i, car in enumerate(cars):
             with cols[i % 2]:
-                st.markdown(f'<div class="car-card"><div class="car-name">{car["name"]}</div><p style="color:#888; font-size:0.8rem;">{car["desc"]}</p></div>', unsafe_allow_html=True)
-                if st.button(f"👁️ 在線閱讀", key=f"btn_{car['name']}"):
-                    st.session_state.selected_pdf = car['file']
+                st.markdown(f"""
+                    <div class="car-card">
+                        <div class="car-name">{car['name']}</div>
+                        <div style="font-size: 0.8rem; color: #888; margin-bottom: 10px;">{car['desc']}</div>
+                    </div>
+                """, unsafe_allow_html=True)
+                if st.button(f"查看型錄", key=f"btn_{car['name']}"):
+                    st.session_state.car_choice = car
                     st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.caption("iPhone 17 Pro Max 專業版 v3.0")
+st.sidebar.caption("iPhone 17 Pro Max 專業優化版")
