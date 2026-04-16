@@ -7,7 +7,50 @@
 <style>
 :root { --suzuki-blue: #003B85; --suzuki-red: #E30613; }
 body { font-family: -apple-system, "Noto Sans TC", sans-serif; margin: 0; background: #f4f4f4; color: #333; }
-</head>
+    /* 頂部導覽列 */
+    .nav-bar { 
+        background: var(--suzuki-blue); 
+        padding: 15px 0; 
+        display: flex; 
+        justify-content: space-around; 
+        position: sticky; 
+        top: 0; 
+        z-index: 1000; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2); 
+    }
+    .nav-bar a { 
+        color: white; 
+        text-decoration: none; 
+        font-weight: bold; 
+        font-size: 1.1rem; 
+    }
+    .active { border-bottom: 2px solid white; padding-bottom: 2px; }
+
+    /* 內容區塊 */
+    .container { padding: 30px 20px; text-align: center; }
+    .hero-card { 
+        background: white; 
+        padding: 40px 20px; 
+        border-radius: 20px; 
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08); 
+        margin-top: 20px; 
+    }
+    .logo { color: var(--suzuki-red); font-size: 2.8rem; font-weight: 900; margin-bottom: 5px; letter-spacing: -1px; }
+    .badge { display: inline-block; background: #e8f5e9; color: #2e7d32; padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; margin-bottom: 20px; }
+    
+    .action-btn { 
+        display: block; 
+        background: var(--suzuki-blue); 
+        color: white; 
+        text-decoration: none; 
+        padding: 15px; 
+        border-radius: 12px; 
+        font-weight: bold; 
+        margin-top: 20px; 
+    }
+</style>
+
+head>
 <body>
 <div class="nav-bar">
 <a href="index.html" class="active">📦 庫存查詢</a>
@@ -25,6 +68,9 @@ body { font-family: -apple-system, "Noto Sans TC", sans-serif; margin: 0; backgr
 
 或點擊下方按鈕展示車型目錄。
 </p>
+    <a href="catalog.html" class="action-btn">立即進入產品型錄</a>
+</div>
+
 </div>
 </body>
 </html>
