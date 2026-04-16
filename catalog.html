@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUZUKI 車型目錄</title>
+    <style>
+        :root { --suzuki-red: #E30613; --suzuki-blue: #003B85; }
+        body { font-family: -apple-system, "Noto Sans TC", sans-serif; background: #f8f9fa; margin: 0; padding: 20px; }
+        
+        /* 頁首導覽 */
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; border-bottom: 2px solid var(--suzuki-red); margin-bottom: 20px; }
+        .back-btn { text-decoration: none; color: var(--suzuki-blue); font-weight: bold; font-size: 0.9rem; }
+        
+        /* 目錄卡片網格 */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .car-card { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.08); text-decoration: none; color: #333; display: flex; flex-direction: column; transition: 0.2s; border: 1px solid #eee; }
+        .car-card:active { transform: scale(0.96); background: #f0f0f0; }
+        
+        /* 臨時圖片佔位（建議之後換成實際車照） */
+        .car-img { width: 100%; height: 100px; background: #eee; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; color: #999; }
+        
+        .car-info { padding: 12px; }
+        .car-name { font-size: 1rem; font-weight: bold; color: var(--suzuki-blue); margin-bottom: 4px; }
+        .car-desc { font-size: 0.75rem; color: #666; line-height: 1.3; }
+    </style>
+</head>
+<body>
+
+<header>
+    <a href="index.html" class="back-btn">← 返回庫存查詢</a>
+    <h2 style="margin:0; font-size: 1.2rem;">數位型錄</h2>
+</header>
+
+<div class="grid">
+    <a href="Swift.pdf" target="_blank" class="car-card">
+        <div class="car-img" style="background:#fdeeee; color:#E30613;">SWIFT</div>
+        <div class="car-info">
+            <div class="car-name">SWIFT</div>
+            <div class="car-desc">日本原裝 Hybrid<br>城市經典 剛好而已</div>
+        </div>
+    </a>
+
+    <a href="Jimny.pdf" target="_blank" class="car-card">
+        <div class="car-img" style="background:#eef5fd; color:#003B85;">JIMNY</div>
+        <div class="car-info">
+            <div class="car-name">JIMNY</div>
+            <div class="car-desc">本格越野精神<br>唯我能回歸型格</div>
+        </div>
+    </a>
+
+    <a href="Vitara.pdf" target="_blank" class="car-card">
+        <div class="car-img">VITARA</div>
+        <div class="car-info">
+            <div class="car-name">VITARA</div>
+            <div class="car-desc">強悍越野實力<br>解鎖生活各種成就</div>
+        </div>
+    </a>
+
+    <a href="S-Cross 目錄.pdf" target="_blank" class="car-card">
+        <div class="car-img">S-CROSS</div>
+        <div class="car-info">
+            <div class="car-name">S-CROSS</div>
+            <div class="car-desc">大膽自信 SUV 風格<br>跨出心裡馭望</div>
+        </div>
+    </a>
+
+    <a href="E Vitara.pdf" target="_blank" class="car-card">
+        <div class="car-img" style="background:#000; color:#fff;">e VITARA</div>
+        <div class="car-info">
+            <div class="car-name">e VITARA</div>
+            <div class="car-desc">首款純電四驅 SUV<br>新未來 因 e 而來</div>
+        </div>
+    </a>
+
+    <a href="Carry.pdf" target="_blank" class="car-card">
+        <div class="car-img">CARRY</div>
+        <div class="car-info">
+            <div class="car-name">CARRY</div>
+            <div class="car-desc">同級 NO.1 大貨台<br>拼大生意 就選 CARRY</div>
+        </div>
+    </a>
+</div>
+
+</body>
+</html>
