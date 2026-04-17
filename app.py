@@ -4,12 +4,12 @@ import base64
 import requests
 import datetime
 
-# 1. 專業介面配置
+# 1. 專業介面配置 (修改此處)
 st.set_page_config(
     page_title="SUZUKI 雲端庫存系統",
     page_icon="🚗",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded" # 改為 expanded，選單會預設打開
 )
 
 # 2. 讀取 Secrets 設定 (GitHub 一鍵更新核心)
