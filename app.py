@@ -1,152 +1,148 @@
 import streamlit as st
 import pandas as pd
-import os
-import urllib.parse
+import base64
+import requests
+import datetime
 
-# 1. 頁面基礎設定
+# 1. 專業介面配置
 st.set_page_config(
-    page_title="SUZUKI 行動銷售助理",
+    page_title="SUZUKI 雲端庫存系統",
     page_icon="🚗",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# 2. 針對手機優化的 CSS
+# 2. 讀取 Secrets 設定 (GitHub 一鍵更新核心)
+try:
+    TOKEN = st.secrets["GITHUB_TOKEN"]
+    REPO = st.secrets["REPO_NAME"]
+except:
+    st.warning("⚠️ 尚未偵測到 Secrets 設定。請在 Streamlit 控制台設定 GITHUB_TOKEN 與 REPO_NAME。")
+
+# 3. 自定義專業 CSS
 st.markdown("""
     <style>
-    .stApp { background-color: #f8f9fa; }
-    [data-testid="stSidebar"] { background-color: #003B85; }
-    [data-testid="stSidebar"] * { color: white !important; }
-    
-    /* 庫存摘要卡片 */
-    .metric-card {
-        background-color: white;
-        padding: 15px;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        border-left: 6px solid #E30613;
-        margin-bottom: 10px;
-        text-align: center;
+    .main { background-color: #f4f7f9; }
+    [data-testid="stSidebar"] { background-color: #003366; color: white; }
+    div[data-testid="stMetric"] {
+        background-color: white; padding: 20px; border-radius: 15px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 6px solid #e11b22;
     }
-    .metric-label { color: #666; font-size: 0.85rem; margin-bottom: 2px; }
-    .metric-value { color: #333; font-size: 1.8rem; font-weight: bold; margin: 0; }
-    
-    /* 型錄卡片樣式 */
-    .car-card {
-        background-color: white;
-        padding: 20px;
-        border-radius: 18px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        margin-bottom: 15px;
-        text-align: center;
-        border: 1px solid #eee;
+    .inventory-card {
+        background-color: white; padding: 18px; margin-bottom: 12px;
+        border-radius: 15px; border: 1px solid #eef2f6;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
-    .car-name { color: #003B85; font-weight: bold; font-size: 1.3rem; margin-bottom: 5px; }
-    
-    /* 專業按鈕樣式 */
-    .stButton>button {
-        width: 100%;
-        border-radius: 12px;
-        background-color: #003B85;
-        color: white;
-        border: none;
-        padding: 12px;
-        font-weight: bold;
-        font-size: 1rem;
-    }
+    .card-title { font-size: 1.2rem; font-weight: 800; color: #003366; }
+    .card-subtitle { color: #6c757d; font-size: 0.9rem; margin-bottom: 8px; }
+    .tag { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; }
+    .tag-available { background-color: #e8f5e9; color: #2e7d32; }
+    .tag-none { background-color: #f5f5f5; color: #9e9e9e; }
+    .tag-special { background-color: #e3f2fd; color: #1565c0; border: 1px solid #1565c0; }
+    .data-label { color: #6c757d; font-size: 0.75rem; }
+    .data-value { font-size: 1rem; font-weight: bold; color: #003366; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. 側邊欄選單
-st.sidebar.title("🚀 功能選單")
-menu = st.sidebar.radio("切換頁面：", ["📊 庫存看板", "📖 數位產品型錄"])
-
-# GitHub 原始檔案基礎路徑 (確保能抓到您的檔案)
-GITHUB_USER = "subarudms"
-REPO_NAME = "suzuki-inventory"
-BASE_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_USER}/{REPO_NAME}/main/"
-
-# 4. 邏輯：庫存看板
-if menu == "📊 庫存看板":
-    st.title("專業庫存即時看板")
+# 4. GitHub 自動更新函數
+def update_github(data_frame):
+    url = f"https://api.github.com/repos/{REPO}/contents/inventory.csv"
+    headers = {"Authorization": f"token {TOKEN}", "Accept": "application/vnd.github.v3+json"}
     
-    # 摘要數據
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<div class="metric-card"><p class="metric-label">總計在庫</p><p class="metric-value">33 台</p></div>', unsafe_allow_html=True)
-        st.markdown('<div class="metric-card"><p class="metric-label">可用差額</p><p class="metric-value">12 台</p></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown('<div class="metric-card"><p class="metric-label">已配車數</p><p class="metric-value">21 台</p></div>', unsafe_allow_html=True)
-        st.markdown('<div class="metric-card"><p class="metric-label">領牌總數</p><p class="metric-value">18 台</p></div>', unsafe_allow_html=True)
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200:
+        sha = res.json()['sha']
+        csv_content = data_frame.to_csv(index=False).encode('utf-8-sig')
+        encoded = base64.b64encode(csv_content).decode('utf-8')
+        
+        payload = {
+            "message": f"庫存更新: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}",
+            "content": encoded,
+            "sha": sha
+        }
+        put_res = requests.put(url, json=payload, headers=headers)
+        return put_res.status_code == 200
+    return False
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.subheader("📋 車型庫存詳細清單")
+# 5. 數據讀取
+@st.cache_data(ttl=1)
+def load_data():
+    try:
+        data = pd.read_csv("inventory.csv").fillna(0)
+        data["年份"] = data["年份"].astype(str)
+        num_cols = ["在庫數", "已配數量", "向金鈴提車", "領牌車"]
+        for col in num_cols:
+            if col in data.columns:
+                data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(int)
+        data["可用/待到"] = data["在庫數"] - data["已配數量"]
+        return data
+    except:
+        return pd.DataFrame()
+
+df = load_data()
+
+# --- 側邊欄 ---
+st.sidebar.markdown("### 🛠️ SUZUKI 雲端系統")
+mode = st.sidebar.radio("請選擇操作模式", ["🔍 業務查詢模式", "⚙️ 管理員編輯後台"])
+
+if mode == "🔍 業務查詢模式":
+    st.markdown("<div style='text-align:center;'><h1 style='color:#003366; font-size:2.5rem;'>SUZUKI</h1><p>專業庫存即時看板</p></div>", unsafe_allow_html=True)
     
-    if os.path.exists("inventory.csv"):
-        try:
-            df = pd.read_csv("inventory.csv")
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        except:
-            st.error("讀取明細失敗。")
-    else:
-        st.warning("找不到 inventory.csv")
-
-# 5. 邏輯：數位產品型錄 (解決 iPhone 觀看問題)
-elif menu == "📖 數位產品型錄":
-    # 使用 Session State 記錄選中的車款
-    if 'car_choice' not in st.session_state:
-        st.session_state.car_choice = None
-
-    if st.session_state.car_choice:
-        # 顯示返回按鈕
-        if st.button("⬅️ 返回型錄列表"):
-            st.session_state.car_choice = None
-            st.rerun()
+    if not df.empty:
+        # 指標看板
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("總計在庫", f"{int(df['在庫數'].sum())} 台")
+        c2.metric("已配車數", f"{int(df['已配數量'].sum())} 台")
+        c3.metric("可用差額", f"{int(df['可用/待到'].sum())} 台")
+        c4.metric("領牌總數", f"{int(df['領牌車'].sum())} 台")
         
-        car = st.session_state.car_choice
-        st.subheader(f"正在閱讀：{car['name']}")
+        st.markdown("---")
         
-        # 建立 PDF 連結 (GitHub Raw 連結)
-        encoded_file = urllib.parse.quote(car['file'])
-        pdf_url = f"{BASE_RAW_URL}{encoded_file}"
+        # 篩選
+        with st.expander("🔍 搜尋與篩選條件"):
+            models = sorted(df["車型"].unique())
+            selected = st.multiselect("篩選車型", models, default=models)
+            keyword = st.text_input("搜尋顏色、年份或排序碼")
         
-        # 使用 Google PDF Viewer 嵌入，這是解決 iOS 只能看第一頁的最強方案
-        viewer_url = f"https://docs.google.com/viewer?url={pdf_url}&embedded=true"
+        f_df = df[df["車型"].isin(selected)]
+        if keyword:
+            f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(keyword)).any(axis=1)]
         
-        st.markdown(f"""
-            <div style="text-align: center; margin-bottom: 10px;">
-                <a href="{pdf_url}" target="_blank" style="color: #003B85; text-decoration: none; font-size: 0.9rem;">
-                    💡 如果畫面跑不出來，請點此開啟全螢幕原檔
-                </a>
-            </div>
-            <iframe src="{viewer_url}" width="100%" height="700px" style="border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1);"></iframe>
-        """, unsafe_allow_html=True)
-        
-    else:
-        st.title("數位產品型錄")
-        st.write("請選擇欲向客戶展示的車型：")
-
-        cars = [
-            {"name": "SWIFT", "desc": "城市經典 輕油電", "file": "Swift.pdf"},
-            {"name": "JIMNY", "desc": "本格越野精神", "file": "Jimny.pdf"},
-            {"name": "VITARA", "desc": "強悍越野實力", "file": "Vitara.pdf"},
-            {"name": "S-CROSS", "desc": "大膽自信 SUV", "file": "S-Cross 目錄.pdf"},
-            {"name": "e VITARA", "desc": "首款純電 SUV", "file": "E Vitara.pdf"},
-            {"name": "CARRY", "desc": "拼大生意首選", "file": "Carry.pdf"},
-        ]
-
-        cols = st.columns(2)
-        for i, car in enumerate(cars):
-            with cols[i % 2]:
-                st.markdown(f"""
-                    <div class="car-card">
-                        <div class="car-name">{car['name']}</div>
-                        <div style="font-size: 0.8rem; color: #888; margin-bottom: 10px;">{car['desc']}</div>
+        # 顯示卡片
+        for _, row in f_df.sort_values(by=["車型", "年份"], ascending=[True, False]).iterrows():
+            if row['領牌車'] > 0:
+                tag = '<span class="tag tag-special">🔵 領牌車專案</span>'
+            elif row['可用/待到'] > 0:
+                tag = '<span class="tag tag-available">✅ 有現車</span>'
+            else:
+                tag = '<span class="tag tag-none">❌ 需預訂</span>'
+            
+            st.markdown(f"""
+                <div class="inventory-card">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div class="card-title">{row['年份']} {row['車型']}</div>
+                        {tag}
                     </div>
-                """, unsafe_allow_html=True)
-                if st.button(f"查看型錄", key=f"btn_{car['name']}"):
-                    st.session_state.car_choice = car
-                    st.rerun()
+                    <div class="card-subtitle">顏色：{row['顏色']} | 排序：{row['排序']}</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:15px; margin-top:10px; border-top:1px solid #f0f0f0; padding-top:10px;">
+                        <div style="flex:1;"><span class="data-label">在庫</span><br><span class="data-value">{row['在庫數']}</span></div>
+                        <div style="flex:1;"><span class="data-label">已配</span><br><span class="data-value">{row['已配數量']}</span></div>
+                        <div style="flex:1;"><span class="data-label" style="color:#e11b22;">可用</span><br><span class="data-value" style="color:#e11b22;">{row['可用/待到']}</span></div>
+                        <div style="flex:1;"><span class="data-label">領牌</span><br><span class="data-value">{row['領牌車']}</span></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-st.sidebar.markdown("---")
-st.sidebar.caption("iPhone 17 Pro Max 專業優化版")
+else:
+    st.markdown("<h2 style='text-align:center; color:#e11b22;'>⚙️ 管理員數據後台</h2>", unsafe_allow_html=True)
+    if st.text_input("驗證管理密碼", type="password") == "1234":
+        st.write("### 📝 編輯庫存資料")
+        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
+        
+        if st.button("🚀 立即同步至雲端 (一鍵更新)"):
+            with st.spinner("同步中..."):
+                if update_github(edited_df):
+                    st.success("✅ 更新成功！GitHub 檔案已同步。")
+                    st.cache_data.clear()
+                else:
+                    st.error("❌ 更新失敗，請檢查 Secrets 設定。")
