@@ -86,20 +86,24 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # 【核心修正：模糊比對 URL 參數】
-        params = st.query_params
-        url_model = params.get("model", None) 
+        # 【新版參數抓取：確保模糊匹配】
+        # 1. 取得所有網址參數
+        all_params = st.query_params.to_dict()
+        # 2. 優先找 model，再找 q (相容舊連結)
+        url_model = all_params.get("model") or all_params.get("q")
         
         models = sorted(df["車型"].unique())
-        
-        # 如果 URL 有參數，找出所有「包含」該文字的車型 (例如點 SWIFT 就勾選 SWIFT GLX 和 SWIFT GLX 2T)
         matched_models = []
+
         if url_model:
-            matched_models = [m for m in models if url_model.upper() in m.upper()]
+            # 將 url_model 轉為大寫並去除空白
+            search_target = str(url_model).upper().strip()
+            # 遍歷 CSV 裡的所有車型，只要包含搜尋字眼就列入 (例如 "SWIFT" 會匹配到 "SWIFT GLX")
+            matched_models = [m for m in models if search_target in str(m).upper()]
 
         # 篩選區
+        # 若有抓到參數，預設縮起篩選器並只顯示結果；若沒參數，展開篩選器
         with st.expander("🔍 搜尋篩選", expanded=(not url_model)):
-            # 如果有匹配到，就預設勾選匹配到的；否則選全部
             default_selection = matched_models if matched_models else models
             sel_m = st.multiselect("車型篩選", models, default=default_selection)
             key = st.text_input("搜尋關鍵字 (顏色/排序碼/年式)")
@@ -139,4 +143,5 @@ else:
             if update_github(ed_df):
                 st.success("更新成功！")
                 st.cache_data.clear()
+                st.rerun() # 強制刷新畫面
             else: st.error("更新失敗")
