@@ -19,7 +19,7 @@ try:
 except:
     st.warning("⚠️ Secrets 未設定")
 
-# 3. CSS 樣式 (維持專業卡片與雙標籤設計)
+# 3. CSS 樣式
 st.markdown("""
     <style>
     .main { background-color: #f4f7f9; }
@@ -45,7 +45,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 4. GitHub 更新函數 (一鍵同步邏輯)
+# 4. GitHub 更新函數
 def update_github(data_frame):
     url = f"https://api.github.com/repos/{REPO}/contents/inventory.csv"
     headers = {"Authorization": f"token {TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -86,16 +86,21 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # 【核心：偵測 URL 參數】
+        # 【核心修正：模糊比對 URL 參數】
         params = st.query_params
-        url_model = params.get("model", None) # 取得網址中 ?model= 後面的文字
+        url_model = params.get("model", None) 
+        
+        models = sorted(df["車型"].unique())
+        
+        # 如果 URL 有參數，找出所有「包含」該文字的車型 (例如點 SWIFT 就勾選 SWIFT GLX 和 SWIFT GLX 2T)
+        matched_models = []
+        if url_model:
+            matched_models = [m for m in models if url_model.upper() in m.upper()]
 
         # 篩選區
-        with st.expander("🔍 搜尋篩選", expanded=(url_model is None)):
-            models = sorted(df["車型"].unique())
-            
-            # 如果 URL 有帶參數，預設就選那個參數，否則選全部
-            default_selection = [url_model] if url_model in models else models
+        with st.expander("🔍 搜尋篩選", expanded=(not url_model)):
+            # 如果有匹配到，就預設勾選匹配到的；否則選全部
+            default_selection = matched_models if matched_models else models
             sel_m = st.multiselect("車型篩選", models, default=default_selection)
             key = st.text_input("搜尋關鍵字 (顏色/排序碼/年式)")
         
@@ -128,9 +133,9 @@ if mode == "🔍 業務查詢模式":
             """, unsafe_allow_html=True)
 else:
     st.markdown("## ⚙️ 管理員後台")
-    if st.text_input("輸入密碼", type="password") == "1234":
+    if st.text_input("輸入管理密碼", type="password") == "1234":
         ed_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
-        if st.button("🚀 立即同步更新"):
+        if st.button("🚀 立即同步更新至 GitHub"):
             if update_github(ed_df):
                 st.success("更新成功！")
                 st.cache_data.clear()
