@@ -86,33 +86,42 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # 【新版參數抓取：確保模糊匹配】
-        # 1. 取得所有網址參數
-        all_params = st.query_params.to_dict()
-        # 2. 優先找 model，再找 q (相容舊連結)
-        url_model = all_params.get("model") or all_params.get("q")
+        # 1. 取得網址參數 (相容最新與舊版 Streamlit)
+        try:
+            url_params = st.query_params.to_dict()
+            url_model = url_params.get("model") or url_params.get("q")
+        except:
+            url_model = None
         
         models = sorted(df["車型"].unique())
+        
+        # 【核心修正】模糊匹配逻辑
         matched_models = []
-
         if url_model:
-            # 將 url_model 轉為大寫並去除空白
-            search_target = str(url_model).upper().strip()
-            # 遍歷 CSV 裡的所有車型，只要包含搜尋字眼就列入 (例如 "SWIFT" 會匹配到 "SWIFT GLX")
-            matched_models = [m for m in models if search_target in str(m).upper()]
+            search_key = str(url_model).upper().strip()
+            # 只要庫存表裡的名稱「包含」網址傳來的字（例如 SWIFT 包含於 SWIFT GLX），就選中
+            matched_models = [m for m in models if search_key in str(m).upper()]
 
         # 篩選區
-        # 若有抓到參數，預設縮起篩選器並只顯示結果；若沒參數，展開篩選器
+        # 如果有匹配到車型，我們預設縮起篩選器以利閱讀結果
         with st.expander("🔍 搜尋篩選", expanded=(not url_model)):
-            default_selection = matched_models if matched_models else models
-            sel_m = st.multiselect("車型篩選", models, default=default_selection)
+            # 如果 matched_models 有東西，default 就用它；否則顯示全部
+            if url_model and matched_models:
+                default_sel = matched_models
+            else:
+                default_sel = models
+                
+            sel_m = st.multiselect("車型篩選", models, default=default_sel)
             key = st.text_input("搜尋關鍵字 (顏色/排序碼/年式)")
         
+        # 過濾資料
         f_df = df[df["車型"].isin(sel_m)]
-        if key: f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(key)).any(axis=1)]
+        if key: 
+            f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(key)).any(axis=1)]
 
         sorted_df = f_df.sort_values(by=["車型", "年份"], ascending=[True, False])
 
+        # 卡片呈現
         for _, row in sorted_df.iterrows():
             tags = '<div class="tag-container">'
             if row['可用'] > 0: tags += '<span class="tag tag-available">✅ 在庫現車</span>'
@@ -140,8 +149,10 @@ else:
     if st.text_input("輸入管理密碼", type="password") == "1234":
         ed_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
         if st.button("🚀 立即同步更新至 GitHub"):
-            if update_github(ed_df):
-                st.success("更新成功！")
-                st.cache_data.clear()
-                st.rerun() # 強制刷新畫面
-            else: st.error("更新失敗")
+            with st.spinner("同步中..."):
+                if update_github(ed_df):
+                    st.success("更新成功！")
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    st.error("更新失敗")
