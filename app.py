@@ -19,13 +19,14 @@ try:
 except:
     st.warning("⚠️ Secrets 未設定")
 
-# 3. CSS 樣式
+# 3. CSS 樣式 (優化數據網格以容納提車資訊)
 st.markdown("""
     <style>
     .main { background-color: #f4f7f9; }
     [data-testid="stSidebar"] { min-width: 280px !important; background-color: #003366; }
     .stRadio [data-testid="stWidgetLabel"] { font-size: 1.2rem !important; color: white !important; font-weight: bold !important; }
     .stRadio div[role="radiogroup"] { background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 12px; }
+    
     .inventory-card {
         background-color: white; padding: 18px; margin-bottom: 12px;
         border-radius: 15px; border: 1px solid #eef2f6;
@@ -33,15 +34,18 @@ st.markdown("""
     }
     .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px; }
     .card-title { font-size: 1.15rem; font-weight: 800; color: #003366; flex: 1; padding-right: 10px; }
+    
     .tag-container { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
     .tag { padding: 3px 8px; border-radius: 15px; font-size: 0.7rem; font-weight: bold; white-space: nowrap; border: 1px solid transparent; }
     .tag-available { background-color: #e8f5e9; color: #2e7d32; border-color: #2e7d32; }
     .tag-special { background-color: #e3f2fd; color: #1565c0; border-color: #1565c0; }
     .tag-none { background-color: #f5f5f5; color: #9e9e9e; }
-    .data-grid { display: flex; gap: 10px; border-top: 1px solid #f0f0f0; padding-top: 10px; margin-top: 10px; }
-    .data-item { flex: 1; text-align: center; }
-    .label { color: #6c757d; font-size: 0.7rem; display: block; }
-    .val { font-size: 1rem; font-weight: bold; color: #003366; }
+    
+    /* 數據網格改為五欄，容納所有資訊 */
+    .data-grid { display: flex; gap: 8px; border-top: 1px solid #f0f0f0; padding-top: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .data-item { flex: 1; min-width: 60px; text-align: center; }
+    .label { color: #6c757d; font-size: 0.65rem; display: block; margin-bottom: 2px; }
+    .val { font-size: 0.95rem; font-weight: bold; color: #003366; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -86,7 +90,7 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # 1. 取得網址參數 (相容最新與舊版 Streamlit)
+        # 取得網址參數
         try:
             url_params = st.query_params.to_dict()
             url_model = url_params.get("model") or url_params.get("q")
@@ -94,41 +98,29 @@ if mode == "🔍 業務查詢模式":
             url_model = None
         
         models = sorted(df["車型"].unique())
-        
-        # 【核心修正】模糊匹配逻辑
         matched_models = []
         if url_model:
             search_key = str(url_model).upper().strip()
-            # 只要庫存表裡的名稱「包含」網址傳來的字（例如 SWIFT 包含於 SWIFT GLX），就選中
             matched_models = [m for m in models if search_key in str(m).upper()]
 
-        # 篩選區
-        # 如果有匹配到車型，我們預設縮起篩選器以利閱讀結果
         with st.expander("🔍 搜尋篩選", expanded=(not url_model)):
-            # 如果 matched_models 有東西，default 就用它；否則顯示全部
-            if url_model and matched_models:
-                default_sel = matched_models
-            else:
-                default_sel = models
-                
+            default_sel = matched_models if url_model and matched_models else models
             sel_m = st.multiselect("車型篩選", models, default=default_sel)
             key = st.text_input("搜尋關鍵字 (顏色/排序碼/年式)")
         
-        # 過濾資料
         f_df = df[df["車型"].isin(sel_m)]
         if key: 
             f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(key)).any(axis=1)]
 
-        sorted_df = f_df.sort_values(by=["車型", "年份"], ascending=[True, False])
-
-        # 卡片呈現
-        for _, row in sorted_df.iterrows():
+        for _, row in f_df.sort_values(by=["車型", "年份"], ascending=[True, False]).iterrows():
+            # 雙標籤邏輯
             tags = '<div class="tag-container">'
             if row['可用'] > 0: tags += '<span class="tag tag-available">✅ 在庫現車</span>'
             if row['領牌車'] > 0: tags += '<span class="tag tag-special">🔵 領牌專案</span>'
             if row['可用'] <= 0 and row['領牌車'] <= 0: tags += '<span class="tag tag-none">❌ 需預訂</span>'
             tags += '</div>'
             
+            # 卡片 HTML 渲染 (加入 向金鈴提車 欄位)
             st.markdown(f"""
                 <div class="inventory-card">
                     <div class="card-header">
@@ -140,7 +132,8 @@ if mode == "🔍 業務查詢模式":
                         <div class="data-item"><span class="label">在庫</span><span class="val">{row['在庫數']}</span></div>
                         <div class="data-item"><span class="label">已配</span><span class="val">{row['已配數量']}</span></div>
                         <div class="data-item"><span class="label" style="color:#e11b22;">可用</span><span class="val" style="color:#e11b22;">{row['可用']}</span></div>
-                        <div class="data-item"><span class="label" style="color:#1565c0;">領牌</span><span class="val" style="color:#1565c0;">{row['領牌車']}</span></div>
+                        <div class="data-item"><span class="label">領牌</span><span class="val">{row['領牌車']}</span></div>
+                        <div class="data-item"><span class="label" style="color:#ffa500;">提車中</span><span class="val" style="color:#ffa500;">{row['向金鈴提車']}</span></div>
                     </div>
                 </div>
             """, unsafe_allow_html=True)
@@ -154,5 +147,4 @@ else:
                     st.success("更新成功！")
                     st.cache_data.clear()
                     st.rerun()
-                else:
-                    st.error("更新失敗")
+                else: st.error("更新失敗")
