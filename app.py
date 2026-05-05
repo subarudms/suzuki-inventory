@@ -19,7 +19,7 @@ try:
 except:
     st.warning("⚠️ Secrets 未設定")
 
-# 3. CSS 樣式 (優化數據網格以容納提車資訊)
+# 3. CSS 樣式
 st.markdown("""
     <style>
     .main { background-color: #f4f7f9; }
@@ -41,7 +41,6 @@ st.markdown("""
     .tag-special { background-color: #e3f2fd; color: #1565c0; border-color: #1565c0; }
     .tag-none { background-color: #f5f5f5; color: #9e9e9e; }
     
-    /* 數據網格改為五欄，容納所有資訊 */
     .data-grid { display: flex; gap: 8px; border-top: 1px solid #f0f0f0; padding-top: 10px; margin-top: 10px; flex-wrap: wrap; }
     .data-item { flex: 1; min-width: 60px; text-align: center; }
     .label { color: #6c757d; font-size: 0.65rem; display: block; margin-bottom: 2px; }
@@ -90,37 +89,43 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # 取得網址參數
-        try:
-            url_params = st.query_params.to_dict()
-            url_model = url_params.get("model") or url_params.get("q")
-        except:
-            url_model = None
+        # --- 自動讀取跳轉參數邏輯 ---
+        query_params = st.query_params
+        # 同時兼容 q 或 model 參數
+        url_query = query_params.get("q") or query_params.get("model")
         
-        models = sorted(df["車型"].unique())
-        matched_models = []
-        if url_model:
-            search_key = str(url_model).upper().strip()
-            matched_models = [m for m in models if search_key in str(m).upper()]
-
-        with st.expander("🔍 搜尋篩選", expanded=(not url_model)):
-            default_sel = matched_models if url_model and matched_models else models
-            sel_m = st.multiselect("車型篩選", models, default=default_sel)
+        models = sorted(df["車型"].unique().tolist())
+        
+        # 決定預設選中的車型清單
+        default_selection = models 
+        is_expanded = True # 預設展開搜尋列
+        
+        if url_query:
+            search_target = str(url_query).upper().strip()
+            # 模糊比對：只要庫存車型名稱包含網址傳來的字眼就選中
+            matched = [m for m in models if search_target in str(m).upper()]
+            if matched:
+                default_selection = matched
+                is_expanded = False # 有匹配到就自動收起搜尋列，直接看結果
+        
+        # 搜尋篩選介面
+        with st.expander("🔍 搜尋篩選", expanded=is_expanded):
+            sel_m = st.multiselect("車型篩選", models, default=default_selection)
             key = st.text_input("搜尋關鍵字 (顏色/排序碼/年式)")
         
+        # 執行資料過濾
         f_df = df[df["車型"].isin(sel_m)]
         if key: 
-            f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(key)).any(axis=1)]
+            f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(key, case=False)).any(axis=1)]
 
+        # 顯示渲染卡片
         for _, row in f_df.sort_values(by=["車型", "年份"], ascending=[True, False]).iterrows():
-            # 雙標籤邏輯
             tags = '<div class="tag-container">'
             if row['可用'] > 0: tags += '<span class="tag tag-available">✅ 在庫現車</span>'
             if row['領牌車'] > 0: tags += '<span class="tag tag-special">🔵 領牌專案</span>'
             if row['可用'] <= 0 and row['領牌車'] <= 0: tags += '<span class="tag tag-none">❌ 需預訂</span>'
             tags += '</div>'
             
-            # 卡片 HTML 渲染 (加入 向金鈴提車 欄位)
             st.markdown(f"""
                 <div class="inventory-card">
                     <div class="card-header">
