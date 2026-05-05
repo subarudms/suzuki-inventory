@@ -89,7 +89,7 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # --- 自動讀取跳轉參數邏輯 ---
+        # --- [修復重點] 自動讀取跳轉參數邏輯 ---
         query_params = st.query_params
         # 同時兼容 q 或 model 參數
         url_query = query_params.get("q") or query_params.get("model")
@@ -102,8 +102,14 @@ if mode == "🔍 業務查詢模式":
         
         if url_query:
             search_target = str(url_query).upper().strip()
-            # 模糊比對：只要庫存車型名稱包含網址傳來的字眼就選中
-            matched = [m for m in models if search_target in str(m).upper()]
+            # 強化模糊比對邏輯
+            matched = [m for m in models if search_target in str(m).upper() or str(m).upper() in search_target]
+            
+            # 如果完全沒匹配到，嘗試只抓第一個單字進行保險比對 (例如 VITARA S 只抓 VITARA)
+            if not matched:
+                first_word = search_target.split(' ')[0]
+                matched = [m for m in models if first_word in str(m).upper()]
+
             if matched:
                 default_selection = matched
                 is_expanded = False # 有匹配到就自動收起搜尋列，直接看結果
