@@ -89,30 +89,32 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # --- [修復重點] 自動讀取跳轉參數邏輯 ---
+        # --- [修復重點] 讀取網址參數並執行自動過濾 ---
         query_params = st.query_params
-        # 同時兼容 q 或 model 參數
+        # 同時兼容銷售表傳來的 q 或 model 參數
         url_query = query_params.get("q") or query_params.get("model")
         
         models = sorted(df["車型"].unique().tolist())
         
-        # 決定預設選中的車型清單
+        # 初始狀態顯示全部，若有參數則會更新
         default_selection = models 
-        is_expanded = True # 預設展開搜尋列
+        is_expanded = True 
         
         if url_query:
+            # 將傳入參數轉大寫並去除空白
             search_target = str(url_query).upper().strip()
-            # 強化模糊比對邏輯
+            
+            # 優先進行包含式比對 (例如傳入 "SWIFT GLX" 可匹配到 "SWIFT")
             matched = [m for m in models if search_target in str(m).upper() or str(m).upper() in search_target]
             
-            # 如果完全沒匹配到，嘗試只抓第一個單字進行保險比對 (例如 VITARA S 只抓 VITARA)
+            # 若無匹配，則取第一個單字再次比對 (例如傳入 "SWIFT GLX 2T" 只取 "SWIFT" 進行比對)
             if not matched:
                 first_word = search_target.split(' ')[0]
                 matched = [m for m in models if first_word in str(m).upper()]
 
             if matched:
                 default_selection = matched
-                is_expanded = False # 有匹配到就自動收起搜尋列，直接看結果
+                is_expanded = False # 匹配成功則縮起搜尋列，直接顯示結果
         
         # 搜尋篩選介面
         with st.expander("🔍 搜尋篩選", expanded=is_expanded):
