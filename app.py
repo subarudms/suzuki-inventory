@@ -61,20 +61,32 @@ def update_github(data_frame):
         return requests.put(url, json=payload, headers=headers).status_code == 200
     return False
 
-# 5. 資料讀取
+# 5. 資料讀取 (內建自動過濾 0 與空白無效行功能)
 @st.cache_data(ttl=1)
 def load_data():
     try:
-        data = pd.read_csv("inventory.csv").fillna(0)
+        data = pd.read_csv("inventory.csv")
+        
+        # 【核心修正】自動過濾沒用的 0 或空白無效行
+        if "車型" in data.columns:
+            data = data[data["車型"].notna()]  # 濾掉原本就是空的行
+            data = data[data["車型"].astype(str).str.strip() != "0"]  # 濾掉變成數字 0 的行
+            data = data[data["車型"].astype(str).str.strip() != ""]   # 濾掉只有空白鍵的行
+            
+        data = data.fillna(0)
+        
         if "年份" in data.columns:
             data["年份"] = data["年份"].astype(str).str.replace(".0", "", regex=False)
+            
         num_cols = ["在庫數", "已配數量", "向金鈴提車", "領牌車"]
         for col in num_cols:
             if col in data.columns:
                 data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(int)
+                
         data["可用"] = data["在庫數"] - data["已配數量"]
         return data
-    except: return pd.DataFrame()
+    except: 
+        return pd.DataFrame()
 
 df = load_data()
 
@@ -89,81 +101,51 @@ if mode == "🔍 業務查詢模式":
     st.markdown("<h2 style='text-align:center; color:#003366;'>SUZUKI 庫存查詢</h2>", unsafe_allow_html=True)
     
     if not df.empty:
-        # --- [修復核心] 智慧參數讀取邏輯 ---
-        query_params = st.query_params
-        url_query = query_params.get("q") or query_params.get("model")
+        # 1. 取得網址參數
+        try:
+            url_params = st.query_params.to_dict()
+            url_model = url_params.get("model") or url_params.get("q")
+        except:
+            url_model = None
         
-        models = sorted(df["車型"].unique().tolist())
-        default_selection = models 
-        is_expanded = True 
-        
-        if url_query:
-            search_target = str(url_query).upper().strip()
-            
-            # 定義模糊關鍵字映射
-            keyword_map = {
-                "SWIFT": "SWIFT",
-                "VITARA": "VITARA",
-                "JIMNY": "JIMNY",
-                "CARRY": "CARRY",
-                "SX4": "SX4",
-                "IGNIS": "IGNIS"
-            }
-            
-            final_keyword = None
-            for key, val in keyword_map.items():
-                if key in search_target:
-                    final_keyword = val
-                    break
-            
-            # 如果映射表沒找到，就用第一個單字
-            if not final_keyword:
-                final_keyword = search_target.split(' ')[0]
+        models = sorted(df["車型"].unique())
+        matched_models = []
+        if url_model:
+            search_key = str(url_model).upper().strip()
+            matched_models = [m for m in models if search_key in str(m).upper()]
 
-            # 執行模糊比對：在庫存清單中尋找包含關鍵字的車型
-            matched = [m for m in models if final_keyword in str(m).upper()]
-
-            if matched:
-                default_selection = matched
-                is_expanded = False # 匹配成功則縮起搜尋列
-
-        # 搜尋篩選介面
-        with st.expander("🔍 搜尋篩選", expanded=is_expanded):
-            sel_m = st.multiselect("車型篩選", models, default=default_selection)
+        with st.expander("🔍 搜尋篩選", expanded=(not url_model)):
+            default_sel = matched_models if url_model and matched_models else models
+            sel_m = st.multiselect("車型篩選", models, default=default_sel)
             key = st.text_input("搜尋關鍵字 (顏色/排序碼/年式)")
         
-        # 執行資料過濾
         f_df = df[df["車型"].isin(sel_m)]
         if key: 
-            f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(key, case=False)).any(axis=1)]
+            f_df = f_df[f_df.astype(str).apply(lambda x: x.str.contains(key)).any(axis=1)]
 
-        # 顯示渲染卡片
-        if not f_df.empty:
-            for _, row in f_df.sort_values(by=["車型", "年份"], ascending=[True, False]).iterrows():
-                tags = '<div class="tag-container">'
-                if row['可用'] > 0: tags += '<span class="tag tag-available">✅ 在庫現車</span>'
-                if row['領牌車'] > 0: tags += '<span class="tag tag-special">🔵 領牌專案</span>'
-                if row['可用'] <= 0 and row['領牌車'] <= 0: tags += '<span class="tag tag-none">❌ 需預訂</span>'
-                tags += '</div>'
-                
-                st.markdown(f"""
-                    <div class="inventory-card">
-                        <div class="card-header">
-                            <div class="card-title">{row['年份']} {row['車型']}</div>
-                            {tags}
-                        </div>
-                        <div style="color:#6c757d; font-size:0.85rem;">顏色：{row['顏色']} | 排序：{row['排序']}</div>
-                        <div class="data-grid">
-                            <div class="data-item"><span class="label">在庫</span><span class="val">{row['在庫數']}</span></div>
-                            <div class="data-item"><span class="label">已配</span><span class="val">{row['已配數量']}</span></div>
-                            <div class="data-item"><span class="label" style="color:#e11b22;">可用</span><span class="val" style="color:#e11b22;">{row['可用']}</span></div>
-                            <div class="data-item"><span class="label">領牌</span><span class="val">{row['領牌車']}</span></div>
-                            <div class="data-item"><span class="label" style="color:#ffa500;">提車中</span><span class="val" style="color:#ffa500;">{row['向金鈴提車']}</span></div>
-                        </div>
+        for _, row in f_df.sort_values(by=["車型", "年份"], ascending=[True, False]).iterrows():
+            tags = '<div class="tag-container">'
+            if row['可用'] > 0: tags += '<span class="tag tag-available">✅ 在庫現車</span>'
+            if row['領牌車'] > 0: tags += '<span class="tag tag-special">🔵 領牌專案</span>'
+            if row['可用'] <= 0 and row['領牌車'] <= 0: tags += '<span class="tag tag-none">❌ 需預訂</span>'
+            tags += '</div>'
+            
+            st.markdown(f"""
+                <div class="inventory-card">
+                    <div class="card-header">
+                        <div class="card-title">{row['年份']} {row['車型']}</div>
+                        {tags}
                     </div>
-                """, unsafe_allow_html=True)
-        else:
-            st.info("⚠️ 找不到對應的庫存資料，請嘗試調整篩選條件。")
+                    <div style="color:#6c757d; font-size:0.85rem;">顏色：{row['顏色']} | 排序：{row['排序']}</div>
+                    <div class="data-grid">
+                        <div class="data-item"><span class="label">在庫</span><span class="val">{row['在庫數']}</span></div>
+                        <div class="data-item"><span class="label">已配</span><span class="val">{row['已配數量']}</span></div>
+                        <div class="data-item"><span class="label" style="color:#e11b22;">可用</span><span class="val" style="color:#e11b22;">{row['可用']}</span></div>
+                        <div class="data-item"><span class="label">領牌</span><span class="val">{row['領牌車']}</span></div>
+                        <div class="data-item"><span class="label" style="color:#ffa500;">提車中</span><span class="val" style="color:#ffa500;">{row['向金鈴提車']}</span></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 else:
     st.markdown("## ⚙️ 管理員後台")
     if st.text_input("輸入管理密碼", type="password") == "1234":
@@ -174,4 +156,5 @@ else:
                     st.success("更新成功！")
                     st.cache_data.clear()
                     st.rerun()
-                else: st.error("更新失敗")
+                else:
+                    st.error("更新失敗")
