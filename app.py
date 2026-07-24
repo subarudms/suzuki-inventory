@@ -153,7 +153,7 @@ if mode == "🔍 業務查詢模式":
                 </div>
             """, unsafe_allow_html=True)
 
-# --- 主畫面 2：直覺式管理後台 (支援排序碼編輯) ---
+# --- 主畫面 2：直覺式管理後台 (支援新增與編輯車型) ---
 else:
     st.markdown("<h2 style='text-align:center; color:#e11b22;'>⚙️ 直覺式庫存管理後台</h2>", unsafe_allow_html=True)
     
@@ -162,7 +162,7 @@ else:
         # 置頂快捷更新按鈕
         col_btn1, col_btn2 = st.columns([2, 1])
         with col_btn1:
-            st.info("💡 提示：修改數量或排序碼後，點擊右側按鈕即可一鍵同步。")
+            st.info("💡 提示：修改或新增車型資料後，點擊右側按鈕即可一鍵同步。")
         with col_btn2:
             if st.button("🚀 一鍵同步更新至雲端", type="primary", use_container_width=True):
                 with st.spinner("同步中..."):
@@ -172,6 +172,43 @@ else:
                         st.rerun()
                     else:
                         st.error("❌ 更新失敗，請檢查金鑰或網路。")
+
+        st.markdown("---")
+        
+        # 【新增車型專區 (摺疊區塊)】
+        with st.expander("➕ 點擊此處新增全新車型/顏色", expanded=False):
+            st.markdown("##### 填寫新車型資訊")
+            col_a, col_b, col_c = st.columns(3)
+            add_model = col_a.text_input("車型名稱 (例如 SWIFT GLX)", "")
+            add_color = col_b.text_input("顏色 (例如 白)", "")
+            add_year = col_c.text_input("年份 (例如 正26)", "正26")
+            
+            col_d, col_e, col_f, col_g, col_h = st.columns(5)
+            add_sort = col_d.text_input("排序碼 / 狀態", "預留")
+            add_stock = col_e.number_input("在庫數", min_value=0, value=0)
+            add_assigned = col_f.number_input("已配數量", min_value=0, value=0)
+            add_special = col_g.number_input("領牌車", min_value=0, value=0)
+            add_pull = col_h.number_input("提車中", min_value=0, value=0)
+            
+            if st.button("➕ 確認新增此筆車型資料", use_container_width=True):
+                if add_model and add_color:
+                    new_row = {
+                        "車型": add_model.strip(),
+                        "顏色": add_color.strip(),
+                        "年份": add_year.strip(),
+                        "排序": add_sort.strip(),
+                        "在庫數": int(add_stock),
+                        "已配數量": int(add_assigned),
+                        "領牌車": int(add_special),
+                        "向金鈴提車": int(add_pull),
+                        "可用": int(add_stock) - int(add_assigned)
+                    }
+                    # 插入至 DataFrame 頂部
+                    new_df = pd.DataFrame([new_row])
+                    st.session_state.admin_df = pd.concat([new_df, st.session_state.admin_df], ignore_index=True)
+                    st.success(f"已新增【{add_year} {add_model} ({add_color})】，別忘了點擊上方「一鍵同步更新至雲端」！")
+                else:
+                    st.warning("⚠️ 請至少填寫「車型名稱」與「顏色」。")
 
         st.markdown("---")
         
@@ -191,7 +228,7 @@ else:
             with st.container():
                 st.markdown(f"#### 🚗 {row['年份']} {row['車型']} ({row['顏色']})")
                 
-                # 第一排：排序碼編輯區（單獨給一個文字框）
+                # 第一排：排序碼編輯區
                 new_sort = st.text_input(f"排序 / 狀態備註", value=str(row["排序"]), key=f"sort_{idx}")
                 
                 # 第二排：四欄數字微調器 (+ / - 按鈕)
