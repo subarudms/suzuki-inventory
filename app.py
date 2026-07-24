@@ -19,7 +19,7 @@ try:
 except:
     st.warning("⚠️ Secrets 未設定")
 
-# 3. CSS 樣式 (優化前後台卡片與操作按鈕)
+# 3. CSS 樣式
 st.markdown("""
     <style>
     .main { background-color: #f4f7f9; }
@@ -153,7 +153,7 @@ if mode == "🔍 業務查詢模式":
                 </div>
             """, unsafe_allow_html=True)
 
-# --- 主畫面 2：直覺式管理後台 (新版卡片控制) ---
+# --- 主畫面 2：直覺式管理後台 (支援排序碼編輯) ---
 else:
     st.markdown("<h2 style='text-align:center; color:#e11b22;'>⚙️ 直覺式庫存管理後台</h2>", unsafe_allow_html=True)
     
@@ -162,7 +162,7 @@ else:
         # 置頂快捷更新按鈕
         col_btn1, col_btn2 = st.columns([2, 1])
         with col_btn1:
-            st.info("💡 提示：在下方直接修改數字，修改完成後點擊右側按鈕即可同步。")
+            st.info("💡 提示：修改數量或排序碼後，點擊右側按鈕即可一鍵同步。")
         with col_btn2:
             if st.button("🚀 一鍵同步更新至雲端", type="primary", use_container_width=True):
                 with st.spinner("同步中..."):
@@ -189,17 +189,20 @@ else:
             row = edit_df.loc[idx]
             
             with st.container():
-                st.markdown(f"#### 🚗 {row['年份']} {row['車型']} ({row['顏色']}) | 排序：{row['排序']}")
+                st.markdown(f"#### 🚗 {row['年份']} {row['車型']} ({row['顏色']})")
                 
-                # 四欄數字微調器 (Number Input / +/- 按鈕)
+                # 第一排：排序碼編輯區（單獨給一個文字框）
+                new_sort = st.text_input(f"排序 / 狀態備註", value=str(row["排序"]), key=f"sort_{idx}")
+                
+                # 第二排：四欄數字微調器 (+ / - 按鈕)
                 c1, c2, c3, c4 = st.columns(4)
-                
                 new_stock = c1.number_input(f"在庫數", min_value=0, value=int(row["在庫數"]), key=f"stock_{idx}")
                 new_assigned = c2.number_input(f"已配數量", min_value=0, value=int(row["已配數量"]), key=f"assign_{idx}")
                 new_special = c3.number_input(f"領牌車", min_value=0, value=int(row["領牌車"]), key=f"special_{idx}")
                 new_pull = c4.number_input(f"提車中", min_value=0, value=int(row["向金鈴提車"]), key=f"pull_{idx}")
                 
-                # 即時更新記憶體中的數據
+                # 即時寫回記憶體
+                st.session_state.admin_df.loc[idx, "排序"] = new_sort
                 st.session_state.admin_df.loc[idx, "在庫數"] = new_stock
                 st.session_state.admin_df.loc[idx, "已配數量"] = new_assigned
                 st.session_state.admin_df.loc[idx, "領牌車"] = new_special
