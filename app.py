@@ -56,8 +56,10 @@ def update_github(data_frame):
     if res.status_code == 200:
         sha = res.json()['sha']
         
-        # 清理並確保欄位結構乾淨
-        save_df = data_frame.drop(columns=['可用'], errors='ignore')
+        # 清理欄位並重算可用庫存
+        save_df = data_frame.copy()
+        save_df["可用"] = save_df["在庫數"].astype(int) - save_df["已配數量"].astype(int)
+        save_df = save_df.drop(columns=['可用'], errors='ignore')
         
         csv_content = save_df.to_csv(index=False).encode('utf-8-sig')
         encoded = base64.b64encode(csv_content).decode('utf-8')
@@ -87,7 +89,7 @@ def load_data():
                 data[col] = pd.to_numeric(data[col], errors='coerce').fillna(0).astype(int)
                 
         data["可用"] = data["在庫數"] - data["已配數量"]
-        return data
+        return data.reset_index(drop=True)
     except: 
         return pd.DataFrame()
 
@@ -153,16 +155,16 @@ if mode == "🔍 業務查詢模式":
                 </div>
             """, unsafe_allow_html=True)
 
-# --- 主畫面 2：直覺式管理後台 (支援新增與編輯車型) ---
+# --- 主畫面 2：直覺式管理後台 (名稱修改 + 刪除車型功能) ---
 else:
     st.markdown("<h2 style='text-align:center; color:#e11b22;'>⚙️ 直覺式庫存管理後台</h2>", unsafe_allow_html=True)
     
     if st.text_input("驗證管理密碼", type="password") == "1234":
         
-        # 置頂快捷更新按鈕
+        # 置頂同步按鈕
         col_btn1, col_btn2 = st.columns([2, 1])
         with col_btn1:
-            st.info("💡 提示：修改或新增車型資料後，點擊右側按鈕即可一鍵同步。")
+            st.info("💡 提示：修改名稱、顏色、數量或點擊刪除後，請點擊右側「一鍵同步」更新至雲端。")
         with col_btn2:
             if st.button("🚀 一鍵同步更新至雲端", type="primary", use_container_width=True):
                 with st.spinner("同步中..."):
@@ -175,20 +177,20 @@ else:
 
         st.markdown("---")
         
-        # 【新增車型專區 (摺疊區塊)】
+        # 【新增車型專區】
         with st.expander("➕ 點擊此處新增全新車型/顏色", expanded=False):
             st.markdown("##### 填寫新車型資訊")
             col_a, col_b, col_c = st.columns(3)
-            add_model = col_a.text_input("車型名稱 (例如 SWIFT GLX)", "")
-            add_color = col_b.text_input("顏色 (例如 白)", "")
-            add_year = col_c.text_input("年份 (例如 正26)", "正26")
+            add_model = col_a.text_input("車型名稱 (例如 VITARA S ALLGRIP)", "", key="add_m")
+            add_color = col_b.text_input("顏色 (例如 白)", "", key="add_c")
+            add_year = col_c.text_input("年份 (例如 正26)", "正26", key="add_y")
             
             col_d, col_e, col_f, col_g, col_h = st.columns(5)
-            add_sort = col_d.text_input("排序碼 / 狀態", "預留")
-            add_stock = col_e.number_input("在庫數", min_value=0, value=0)
-            add_assigned = col_f.number_input("已配數量", min_value=0, value=0)
-            add_special = col_g.number_input("領牌車", min_value=0, value=0)
-            add_pull = col_h.number_input("提車中", min_value=0, value=0)
+            add_sort = col_d.text_input("排序碼 / 狀態", "預留", key="add_s")
+            add_stock = col_e.number_input("在庫數", min_value=0, value=0, key="add_st")
+            add_assigned = col_f.number_input("已配數量", min_value=0, value=0, key="add_as")
+            add_special = col_g.number_input("領牌車", min_value=0, value=0, key="add_sp")
+            add_pull = col_h.number_input("提車中", min_value=0, value=0, key="add_p")
             
             if st.button("➕ 確認新增此筆車型資料", use_container_width=True):
                 if add_model and add_color:
@@ -203,10 +205,10 @@ else:
                         "向金鈴提車": int(add_pull),
                         "可用": int(add_stock) - int(add_assigned)
                     }
-                    # 插入至 DataFrame 頂部
                     new_df = pd.DataFrame([new_row])
                     st.session_state.admin_df = pd.concat([new_df, st.session_state.admin_df], ignore_index=True)
-                    st.success(f"已新增【{add_year} {add_model} ({add_color})】，別忘了點擊上方「一鍵同步更新至雲端」！")
+                    st.success(f"已新增【{add_year} {add_model} ({add_color})】，請點擊頂部「一鍵同步更新至雲端」！")
+                    st.rerun()
                 else:
                     st.warning("⚠️ 請至少填寫「車型名稱」與「顏色」。")
 
@@ -221,25 +223,40 @@ else:
         else:
             filtered_indices = edit_df.index
 
-        # 以精美卡片呈現編輯介面
+        # 編輯卡片列表
         for idx in filtered_indices:
             row = edit_df.loc[idx]
             
             with st.container():
-                st.markdown(f"#### 🚗 {row['年份']} {row['車型']} ({row['顏色']})")
+                # 標題與【刪除按鈕】
+                col_title, col_del = st.columns([3, 1])
+                with col_title:
+                    st.markdown(f"#### 🚗 車型項目卡片")
+                with col_del:
+                    if st.button("🗑️ 刪除這台車", key=f"del_{idx}"):
+                        st.session_state.admin_df = st.session_state.admin_df.drop(index=idx).reset_index(drop=True)
+                        st.warning("已移除該筆條目，請務必點擊頂部「一鍵同步更新至雲端」生效！")
+                        st.rerun()
                 
-                # 第一排：排序碼編輯區
-                new_sort = st.text_input(f"排序 / 狀態備註", value=str(row["排序"]), key=f"sort_{idx}")
+                # 第一排：自由修改【車型名稱 / 顏色 / 年份 / 排序碼】
+                ca, cb, cc, cd = st.columns([2, 1, 1, 2])
+                new_model = ca.text_input("車型名稱 (可改名)", value=str(row["車型"]), key=f"model_{idx}")
+                new_color = cb.text_input("顏色", value=str(row["顏色"]), key=f"color_{idx}")
+                new_year = cc.text_input("年份", value=str(row["年份"]), key=f"year_{idx}")
+                new_sort = cd.text_input("排序 / 狀態備註", value=str(row["排序"]), key=f"sort_{idx}")
                 
-                # 第二排：四欄數字微調器 (+ / - 按鈕)
+                # 第二排：數字微調 (+ / - 按鈕)
                 c1, c2, c3, c4 = st.columns(4)
-                new_stock = c1.number_input(f"在庫數", min_value=0, value=int(row["在庫數"]), key=f"stock_{idx}")
-                new_assigned = c2.number_input(f"已配數量", min_value=0, value=int(row["已配數量"]), key=f"assign_{idx}")
-                new_special = c3.number_input(f"領牌車", min_value=0, value=int(row["領牌車"]), key=f"special_{idx}")
-                new_pull = c4.number_input(f"提車中", min_value=0, value=int(row["向金鈴提車"]), key=f"pull_{idx}")
+                new_stock = c1.number_input("在庫數", min_value=0, value=int(row["在庫數"]), key=f"stock_{idx}")
+                new_assigned = c2.number_input("已配數量", min_value=0, value=int(row["已配數量"]), key=f"assign_{idx}")
+                new_special = c3.number_input("領牌車", min_value=0, value=int(row["領牌車"]), key=f"special_{idx}")
+                new_pull = c4.number_input("提車中", min_value=0, value=int(row["向金鈴提車"]), key=f"pull_{idx}")
                 
-                # 即時寫回記憶體
-                st.session_state.admin_df.loc[idx, "排序"] = new_sort
+                # 即時更新暫存
+                st.session_state.admin_df.loc[idx, "車型"] = new_model.strip()
+                st.session_state.admin_df.loc[idx, "顏色"] = new_color.strip()
+                st.session_state.admin_df.loc[idx, "年份"] = new_year.strip()
+                st.session_state.admin_df.loc[idx, "排序"] = new_sort.strip()
                 st.session_state.admin_df.loc[idx, "在庫數"] = new_stock
                 st.session_state.admin_df.loc[idx, "已配數量"] = new_assigned
                 st.session_state.admin_df.loc[idx, "領牌車"] = new_special
